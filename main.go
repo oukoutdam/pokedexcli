@@ -2,16 +2,23 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"maps"
+	"net/http"
 	"os"
 	"slices"
 )
 
+type config struct {
+	Next     string
+	Previous string
+}
+
 type cliCommand struct {
 	name        string
 	description string
-	callback    func() error
+	callback    func(*config) error
 }
 
 var cliCommands map[string]cliCommand
@@ -28,11 +35,22 @@ func init() {
 			description: "Displays a help message",
 			callback:    commandHelp,
 		},
+		"map": {
+			name:        "map",
+			description: "Displays the names of 20 location areas in the Pokemon world. Each subsequent call to map will display the next 20 locations",
+			callback:    commandMap,
+		},
+		"mapb": {
+			name:        "mapb",
+			description: "Displays the names of 20 previous location areas in the Pokemon world. Each subsequent call to map will display the previous 20 locations",
+			callback:    commandMapb,
+		},
 	}
 }
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
+	cfg := config{}
 
 	for {
 		fmt.Print("Pokedex > ")
@@ -50,7 +68,7 @@ func main() {
 			fmt.Println("Unknown command")
 			continue
 		}
-		if err := cmd.callback(); err != nil {
+		if err := cmd.callback(&cfg); err != nil {
 			fmt.Fprintln(os.Stderr, "error running command:", err)
 		}
 	}
@@ -61,13 +79,13 @@ func main() {
 	}
 }
 
-func commandExit() error {
+func commandExit(cfg *config) error {
 	fmt.Println("Closing the Pokedex... Goodbye!")
 	os.Exit(0)
 	return nil
 }
 
-func commandHelp() error {
+func commandHelp(cfg *config) error {
 	fmt.Println("Welcome to the Pokedex!")
 	fmt.Printf("Usage:\n\n")
 
@@ -75,4 +93,69 @@ func commandHelp() error {
 		fmt.Printf("%s: %s\n", name, cliCommands[name].description)
 	}
 	return nil
+}
+
+type locationAreas struct {
+	Next     string `json:"next"`
+	Previous string `json:"previous"`
+	Results  []struct {
+		Name string `json:"name"`
+		URL  string `json:"url"`
+	} `json:"results"`
+}
+
+func commandMap(cfg *config) error {
+	locationAreaURL := "https://pokeapi.co/api/v2/location-area"
+	if cfg.Next != "" {
+		locationAreaURL = cfg.Next
+	}
+
+	las, err := fetchLocationAreas(locationAreaURL)
+	if err != nil {
+		return err
+	}
+
+	cfg.Next = las.Next
+	cfg.Previous = las.Previous
+	for _, la := range las.Results {
+		fmt.Println(la.Name)
+	}
+	return nil
+}
+
+func commandMapb(cfg *config) error {
+	if cfg.Previous == "" {
+		fmt.Println("you're on the first page")
+		return nil
+	}
+	locationAreaURL := cfg.Previous
+
+	las, err := fetchLocationAreas(locationAreaURL)
+	if err != nil {
+		return err
+	}
+	cfg.Next = las.Next
+	cfg.Previous = las.Previous
+	for _, la := range las.Results {
+		fmt.Println(la.Name)
+	}
+	return nil
+}
+
+func fetchLocationAreas(url string) (locationAreas, error) {
+	res, err := http.Get(url)
+	if err != nil {
+		return locationAreas{}, err
+	}
+	defer res.Body.Close()
+
+	if res.StatusCode > 299 {
+		return locationAreas{}, fmt.Errorf("bad status code: %d", res.StatusCode)
+	}
+
+	var las locationAreas
+	if err := json.NewDecoder(res.Body).Decode(&las); err != nil {
+		return locationAreas{}, err
+	}
+	return las, nil
 }
