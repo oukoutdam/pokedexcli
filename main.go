@@ -8,17 +8,31 @@ import (
 	"net/http"
 	"os"
 	"slices"
+	"time"
 )
 
 type config struct {
-	Next     string
-	Previous string
+	next       string
+	previous   string
+	pokeClient pokeAPIClient
 }
 
 type cliCommand struct {
 	name        string
 	description string
 	callback    func(*config) error
+}
+
+type pokeAPIClient struct {
+	httpClient http.Client
+}
+
+func NewPokeAPIClient(timeout time.Duration) pokeAPIClient {
+	return pokeAPIClient{
+		httpClient: http.Client{
+			Timeout: timeout,
+		},
+	}
 }
 
 var cliCommands map[string]cliCommand
@@ -50,7 +64,10 @@ func init() {
 
 func main() {
 	scanner := bufio.NewScanner(os.Stdin)
-	cfg := config{}
+	pokeClient := NewPokeAPIClient(5 * time.Second)
+	cfg := config{
+		pokeClient: pokeClient,
+	}
 
 	for {
 		fmt.Print("Pokedex > ")
@@ -95,67 +112,69 @@ func commandHelp(cfg *config) error {
 	return nil
 }
 
-type locationAreas struct {
-	Next     string `json:"next"`
-	Previous string `json:"previous"`
-	Results  []struct {
-		Name string `json:"name"`
-		URL  string `json:"url"`
-	} `json:"results"`
+type locationArea struct {
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type locationAreasResponse struct {
+	Next     string         `json:"next"`
+	Previous string         `json:"previous"`
+	Results  []locationArea `json:"results"`
 }
 
 func commandMap(cfg *config) error {
 	locationAreaURL := "https://pokeapi.co/api/v2/location-area"
-	if cfg.Next != "" {
-		locationAreaURL = cfg.Next
+	if cfg.next != "" {
+		locationAreaURL = cfg.next
 	}
 
-	las, err := fetchLocationAreas(locationAreaURL)
+	areas, err := cfg.pokeClient.fetchLocationAreas(locationAreaURL)
 	if err != nil {
 		return err
 	}
 
-	cfg.Next = las.Next
-	cfg.Previous = las.Previous
-	for _, la := range las.Results {
-		fmt.Println(la.Name)
+	cfg.next = areas.Next
+	cfg.previous = areas.Previous
+	for _, area := range areas.Results {
+		fmt.Println(area.Name)
 	}
 	return nil
 }
 
 func commandMapb(cfg *config) error {
-	if cfg.Previous == "" {
+	if cfg.previous == "" {
 		fmt.Println("you're on the first page")
 		return nil
 	}
-	locationAreaURL := cfg.Previous
+	locationAreaURL := cfg.previous
 
-	las, err := fetchLocationAreas(locationAreaURL)
+	areas, err := cfg.pokeClient.fetchLocationAreas(locationAreaURL)
 	if err != nil {
 		return err
 	}
-	cfg.Next = las.Next
-	cfg.Previous = las.Previous
-	for _, la := range las.Results {
-		fmt.Println(la.Name)
+	cfg.next = areas.Next
+	cfg.previous = areas.Previous
+	for _, area := range areas.Results {
+		fmt.Println(area.Name)
 	}
 	return nil
 }
 
-func fetchLocationAreas(url string) (locationAreas, error) {
-	res, err := http.Get(url)
+func (c *pokeAPIClient) fetchLocationAreas(url string) (locationAreasResponse, error) {
+	res, err := c.httpClient.Get(url)
 	if err != nil {
-		return locationAreas{}, err
+		return locationAreasResponse{}, err
 	}
 	defer res.Body.Close()
 
 	if res.StatusCode > 299 {
-		return locationAreas{}, fmt.Errorf("bad status code: %d", res.StatusCode)
+		return locationAreasResponse{}, fmt.Errorf("bad status code: %d", res.StatusCode)
 	}
 
-	var las locationAreas
-	if err := json.NewDecoder(res.Body).Decode(&las); err != nil {
-		return locationAreas{}, err
+	var areas locationAreasResponse
+	if err := json.NewDecoder(res.Body).Decode(&areas); err != nil {
+		return locationAreasResponse{}, err
 	}
-	return las, nil
+	return areas, nil
 }
