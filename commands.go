@@ -57,6 +57,11 @@ func init() {
 			description: "inspect <pokemon-name>: Look at a caught pokemon's details",
 			callback:    commandInspect,
 		},
+		"pokedex": {
+			name:        "pokedex",
+			description: "Lists all pokemons caught and placed in Pokedex",
+			callback:    commandPokedex,
+		},
 	}
 }
 
@@ -198,4 +203,12 @@ func printPokemon(pokemon pokeapi.Pokemon) {
 	for _, pokemonType := range pokemon.Types {
 		fmt.Printf("  - %s\n", pokemonType.Type.Name)
 	}
+}
+
+func commandPokedex(cfg *config, args ...string) error {
+	fmt.Println("Your Pokedex:")
+	for key, _ := range cfg.pokedex {
+		fmt.Printf(" - %s\n", key)
+	}
+	return nil
 }
