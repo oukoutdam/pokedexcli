@@ -8,6 +8,8 @@ import (
 	"math/rand/v2"
 	"os"
 	"slices"
+
+	"github.com/oukoutdam/pokedexcli/internal/pokeapi"
 )
 
 type cliCommand struct {
@@ -49,6 +51,11 @@ func init() {
 			name:        "catch",
 			description: "catch <pokemon-name>: Try to catch a pokemon",
 			callback:    commandCatch,
+		},
+		"inspect": {
+			name:        "inspect",
+			description: "inspect <pokemon-name>: Look at a caught pokemon's details",
+			callback:    commandInspect,
 		},
 	}
 }
@@ -161,4 +168,34 @@ func calculateCatchRate(baseExperience int) float64 {
 
 func attemptCatch(catchRate float64) bool {
 	return rand.Float64() < catchRate
+}
+
+func commandInspect(cfg *config, args ...string) error {
+	if len(args) != 1 {
+		return errors.New("usage: inspect <pokemon-name>")
+	}
+
+	pokemonName := args[0]
+	pokemon, ok := cfg.pokedex[pokemonName]
+	if !ok {
+		fmt.Println("you have not caught that pokemon")
+		return nil
+	}
+
+	printPokemon(pokemon)
+	return nil
+}
+
+func printPokemon(pokemon pokeapi.Pokemon) {
+	fmt.Printf("Name: %s\n", pokemon.Name)
+	fmt.Printf("Height: %d\n", pokemon.Height)
+	fmt.Printf("Weight: %d\n", pokemon.Weight)
+	fmt.Println("Stats:")
+	for _, stat := range pokemon.Stats {
+		fmt.Printf("  -%s: %d\n", stat.Stat.Name, stat.BaseStat)
+	}
+	fmt.Println("Types:")
+	for _, pokemonType := range pokemon.Types {
+		fmt.Printf("  - %s\n", pokemonType.Type.Name)
+	}
 }
