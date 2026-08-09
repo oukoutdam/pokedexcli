@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"maps"
+	"math"
+	"math/rand/v2"
 	"os"
 	"slices"
 )
@@ -42,6 +44,11 @@ func init() {
 			name:        "explore",
 			description: "explore <area-name>: Lists the pokemon found in the location area",
 			callback:    commandExplore,
+		},
+		"catch": {
+			name:        "catch",
+			description: "catch <pokemon-name>: Try to catch a pokemon",
+			callback:    commandCatch,
 		},
 	}
 }
@@ -111,4 +118,47 @@ func commandExplore(cfg *config, args ...string) error {
 	}
 
 	return nil
+}
+
+func commandCatch(cfg *config, args ...string) error {
+	if len(args) != 1 {
+		return errors.New("usage: catch <pokemon-name>")
+	}
+
+	pokemonName := args[0]
+
+	fmt.Printf("Throwing a Pokeball at %s...\n", pokemonName)
+
+	pokemon, err := cfg.pokeClient.GetPokemon(pokemonName)
+	if err != nil {
+		return err
+	}
+
+	catchRate := calculateCatchRate(pokemon.BaseExperience)
+	caught := attemptCatch(catchRate)
+	if caught {
+		if _, ok := cfg.pokedex[pokemon.Name]; ok {
+			fmt.Printf("%s was caught! (already in your pokedex)\n", pokemon.Name)
+		} else {
+			fmt.Printf("%s was caught!\n", pokemon.Name)
+			cfg.pokedex[pokemon.Name] = pokemon
+		}
+	} else {
+		fmt.Printf("%s escaped!\n", pokemonName)
+	}
+
+	return nil
+}
+
+func calculateCatchRate(baseExperience int) float64 {
+	const minCatchRate, maxCatchRate = 0.05, 0.95
+	const minExp, maxExp = 36.0, 608.0
+
+	clampedExp := math.Min(math.Max(float64(baseExperience), minExp), maxExp)
+
+	return maxCatchRate - ((clampedExp-minExp)/(maxExp-minExp))*(maxCatchRate-minCatchRate)
+}
+
+func attemptCatch(catchRate float64) bool {
+	return rand.Float64() < catchRate
 }

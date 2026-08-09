@@ -13,6 +13,7 @@ type config struct {
 	next       string
 	previous   string
 	pokeClient pokeapi.Client
+	pokedex    map[string]pokeapi.Pokemon
 }
 
 func main() {
@@ -20,6 +21,7 @@ func main() {
 	pokeClient := pokeapi.NewClient(5*time.Second, 5*time.Minute)
 	cfg := config{
 		pokeClient: pokeClient,
+		pokedex:    make(map[string]pokeapi.Pokemon),
 	}
 
 	for {
