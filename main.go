@@ -38,7 +38,7 @@ func main() {
 			fmt.Println("Unknown command")
 			continue
 		}
-		if err := cmd.callback(&cfg); err != nil {
+		if err := cmd.callback(&cfg, userInputSlice[1:]...); err != nil {
 			fmt.Fprintln(os.Stderr, "error running command:", err)
 		}
 	}
